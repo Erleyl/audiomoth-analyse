@@ -1,0 +1,4 @@
+input_dir: "/Volumes/WD_BLACK/audioacoustics/June"
+output_dir: "../output"
+coordinates_file: "../audiomoth_coordinates.csv"
+min_confidence: 0.1
