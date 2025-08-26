@@ -2,7 +2,9 @@ import os
 import csv
 import sys
 import yaml
+import shutil 
 from birdnetlib import Recording
+from pydub import AudioSegment
 from birdnetlib.analyzer import Analyzer
 from datetime import datetime
 
@@ -29,6 +31,14 @@ INPUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, CONFIG['input_dir']))
 OUTPUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, CONFIG['output_dir']))
 COORDINATES_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, CONFIG['coordinates_file']))
 MIN_CONFIDENCE = CONFIG.get('min_confidence', 0.1)
+
+# New segment extraction settings
+SEGMENT_SETTINGS = CONFIG.get('segment_extraction', {})
+EXTRACT_SEGMENTS = SEGMENT_SETTINGS.get('enabled', False)
+SEGMENT_OUTPUT_DIR = os.path.join(OUTPUT_DIR, SEGMENT_SETTINGS.get('output_dir', 'segments'))
+MAX_SEGMENTS = SEGMENT_SETTINGS.get('max_segments', 20)
+SEGMENT_LENGTH = SEGMENT_SETTINGS.get('segment_length_sec', 3)
+THREADS = SEGMENT_SETTINGS.get('threads', 4)
 
 # Path to the file that tracks already processed files
 PROCESSED_LOG_FILE = os.path.join(OUTPUT_DIR, "processed_files.txt")
@@ -87,6 +97,58 @@ def add_processed_file(file_path):
     with open(PROCESSED_LOG_FILE, 'a') as f:
         f.write(f"{file_path}\n")
 
+def extract_audio_segments(input_file_path, detections, log_file):
+    """
+    Extracts and saves audio segments for top detections.
+    Requires pydub and ffmpeg installed.
+    """
+    if not EXTRACT_SEGMENTS:
+        return
+
+    os.makedirs(SEGMENT_OUTPUT_DIR, exist_ok=True)
+    
+    # Sort detections by confidence in descending order
+    detections.sort(key=lambda x: x['confidence'], reverse=True)
+    
+    # Limit to the top N segments
+    top_detections = detections[:MAX_SEGMENTS]
+
+    log_message(f"Extracting up to {len(top_detections)} segments from {os.path.basename(input_file_path)}...", log_file)
+    
+    try:
+        # Load the audio file
+        audio = AudioSegment.from_wav(input_file_path)
+    except Exception as e:
+        log_message(f"Error loading audio file for segment extraction: {e}", log_file)
+        return
+
+    for i, detection in enumerate(top_detections):
+        common_name = detection.get('common_name', 'unknown').replace(' ', '_').replace('/', '_')
+        start_time_sec = detection.get('start')
+        end_time_sec = detection.get('end')
+        confidence = detection.get('confidence')
+
+        if start_time_sec is None or end_time_sec is None:
+            continue
+
+        # Adjust segment length for short detections
+        segment_duration = (end_time_sec - start_time_sec)
+        
+        # Calculate start and end times in milliseconds
+        start_ms = start_time_sec * 1000
+        end_ms = end_time_sec * 1000
+
+        # Create a new segment from the detection time range
+        segment = audio[start_ms:end_ms]
+
+        output_filename = f"{common_name}_{confidence:.2f}_{os.path.basename(input_file_path)}"
+        output_file_path = os.path.join(SEGMENT_OUTPUT_DIR, output_filename)
+        
+        try:
+            segment.export(output_file_path, format="wav")
+        except Exception as e:
+            log_message(f"Error exporting segment {output_filename}: {e}", log_file)
+            
 # --- Main Analysis Logic ---
 def analyze_audio_files():
     """
