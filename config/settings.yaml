@@ -1,4 +1,10 @@
-input_dir: "/Volumes/WD_BLACK/audioacoustics/June"
+input_dir: "../input"
 output_dir: "../output"
 coordinates_file: "../audiomoth_coordinates.csv"
 min_confidence: 0.1
+
+segment_extraction:
+  enabled: true
+  output_dir: segments
+  max_segments: 20
+  segment_length_sec: 3
