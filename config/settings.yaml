@@ -1,6 +1,6 @@
-input_dir: "../input"
-output_dir: "../output"
-coordinates_file: "../audiomoth_coordinates.csv"
+input_dir: "./input"
+output_dir: "./output"
+coordinates_file: "./audiomoth_coordinates.csv"
 min_confidence: 0.1
 
 segment_extraction:
